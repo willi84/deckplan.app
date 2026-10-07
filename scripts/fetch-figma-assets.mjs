@@ -240,6 +240,26 @@ async function updateBuildInfo() {
 
 await updateBuildInfo();
 
+
+// -----------------------------------------------------------------------------
+// Generate build ID for cache busting
+// -----------------------------------------------------------------------------
+
+const buildId = buildStartedAt
+  .toISOString()
+  .replace(/\D/g, "")
+  .slice(0, 14);
+
+await writeFile(
+  "js/build.js",
+  `window.DECKPLAN_BUILD_ID = "${buildId}";\n`,
+  "utf8",
+);
+
+console.log(`🏷️ Build ID: ${buildId}`);
+
+await updateBuildInfo();
+
 // -----------------------------------------------------------------------------
 // Summary
 // -----------------------------------------------------------------------------
