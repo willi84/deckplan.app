@@ -1,8 +1,7 @@
 const BUILD_ID = window.DECKPLAN_BUILD_ID ?? "local";
 
 function assetUrl(path) {
-  const separator = path.includes("?") ? "&" : "?";
-  return `${path}${separator}v=${encodeURIComponent(BUILD_ID)}`;
+  return `${path}?v=${encodeURIComponent(BUILD_ID)}`;
 }
 
 const KEY='deckplan-editor-v4';
@@ -13,10 +12,7 @@ let state=load();
 let currentSeat=null;
 let tab='json';
 
-function coachKey(
-  operator=state?.operator||'db',
-  coachClass=state?.coachClass||'1'
-){
+function coachKey(operator=state?.operator||'db',coachClass=state?.coachClass||'1'){
   return `${operator}:class-${coachClass}`;
 }
 
@@ -30,12 +26,8 @@ function empty(){
   };
 }
 
-function ensureCoach(
-  s,
-  key=coachKey(s.operator,s.coachClass)
-){
+function ensureCoach(s,key=coachKey(s.operator,s.coachClass)){
   s.coaches ||= {};
-
   s.coaches[key] ||= {
     operator:s.operator,
     coachClass:s.coachClass,
@@ -44,7 +36,6 @@ function ensureCoach(
       top:{}
     }
   };
-
   return s.coaches[key];
 }
 
@@ -60,13 +51,10 @@ function load(){
       };
 
       ensureCoach(s);
-
       return s;
     }
 
-    const old=JSON.parse(
-      localStorage.getItem(LEGACY_KEY)
-    );
+    const old=JSON.parse(localStorage.getItem(LEGACY_KEY));
 
     if(old){
       const s=empty();
@@ -75,9 +63,7 @@ function load(){
       s.coachClass=old.coachClass||'1';
       s.floor=old.floor||'bottom';
 
-      s.coaches[
-        coachKey(s.operator,s.coachClass)
-      ]={
+      s.coaches[coachKey(s.operator,s.coachClass)]={
         operator:s.operator,
         coachClass:s.coachClass,
         seats:{
@@ -98,11 +84,7 @@ function coach(){
 }
 
 function persist(){
-  localStorage.setItem(
-    KEY,
-    JSON.stringify(state)
-  );
-
+  localStorage.setItem(KEY,JSON.stringify(state));
   renderOutput();
   renderStats();
 }
@@ -121,10 +103,7 @@ function esc(s){
 }
 
 function assetKey(kind){
-  return state.operator+
-    '_'+
-    kind+
-    (kind==='side'?'_1':'');
+  return state.operator+'_'+kind+(kind==='side'?'_1':'');
 }
 
 function setOperator(op){
@@ -141,36 +120,18 @@ function setFloor(f){
 }
 
 function renderAll(){
-  document.body.classList.remove(
-    'operator-db',
-    'operator-sbb'
+  document.body.classList.remove('operator-db','operator-sbb');
+  document.body.classList.add('operator-'+state.operator);
+
+  document.querySelectorAll('#operator button').forEach(
+    b=>b.classList.toggle('active',b.dataset.op===state.operator)
   );
 
-  document.body.classList.add(
-    'operator-'+state.operator
+  document.querySelectorAll('#floor button').forEach(
+    b=>b.classList.toggle('active',b.dataset.floor===state.floor)
   );
 
-  document
-    .querySelectorAll('#operator button')
-    .forEach(
-      b=>b.classList.toggle(
-        'active',
-        b.dataset.op===state.operator
-      )
-    );
-
-  document
-    .querySelectorAll('#floor button')
-    .forEach(
-      b=>b.classList.toggle(
-        'active',
-        b.dataset.floor===state.floor
-      )
-    );
-
-  document.getElementById(
-    'coachTitle'
-  ).textContent=
+  document.getElementById('coachTitle').textContent=
     (state.operator==='db'?'DB':'SBB')+
     ' · '+
     state.coachClass+
@@ -182,6 +143,7 @@ function renderAll(){
   renderOutput();
 }
 
+
 // -----------------------------------------------------------------------------
 // Side assets
 // -----------------------------------------------------------------------------
@@ -191,7 +153,6 @@ const SIDE_ASSETS={
     1:'assets/db-ic2-class-1-side.svg',
     2:'assets/db-ic2-class-2-side.svg'
   },
-
   sbb:{
     1:'assets/sbb-ic2-class-1-side.svg',
     2:'assets/sbb-ic2-class-2-side.svg'
@@ -206,8 +167,7 @@ function setCoachClass(c){
 }
 
 function sideMarkup(c){
-  const active=
-    String(c)===String(state.coachClass);
+  const active=String(c)===String(state.coachClass);
 
   const p=active
     ? floorProgress()
@@ -253,161 +213,73 @@ function floorProgress(){
   const totals=
     String(state.coachClass)==='1'
       ? countsForClass1()
-      : (
-          coach().totals || {
-            top:0,
-            bottom:0
-          }
-        );
+      : (coach().totals||{top:0,bottom:0});
 
   const c=coach();
 
   return {
     top:totals.top
-      ? Math.round(
-          Object.keys(
-            c.seats.top||{}
-          ).length /
-          totals.top *
-          100
-        )
+      ? Math.round(Object.keys(c.seats.top||{}).length/totals.top*100)
       : 0,
 
     bottom:totals.bottom
-      ? Math.round(
-          Object.keys(
-            c.seats.bottom||{}
-          ).length /
-          totals.bottom *
-          100
-        )
+      ? Math.round(Object.keys(c.seats.bottom||{}).length/totals.bottom*100)
       : 0
   };
 }
 
 function renderSide(){
-  const first=
-    document.getElementById('sideFirst');
-
-  const second=
-    document.getElementById('sideSecond');
+  const first=document.getElementById('sideFirst');
+  const second=document.getElementById('sideSecond');
 
   first.innerHTML=sideMarkup(1);
   second.innerHTML=sideMarkup(2);
 
-  document
-    .querySelectorAll('.coach-option')
-    .forEach(el=>{
-      const active=
-        el.dataset.coach===
-        String(state.coachClass);
+  document.querySelectorAll('.coach-option').forEach(el=>{
+    const active=el.dataset.coach===String(state.coachClass);
 
-      // DB und SBB besitzen jetzt Deck-SVGs
-      // für die 2. Klasse.
-      el.classList.remove('no-deck');
+    el.classList.toggle(
+      'no-deck',
+      el.dataset.coach==='2' && state.operator!=='db'
+    );
 
-      el.classList.toggle(
-        'active',
-        active
-      );
+    el.classList.toggle('active',active);
 
-      el.classList.toggle(
-        'floor-top',
-        active &&
-        state.floor==='top'
-      );
+    el.classList.toggle(
+      'floor-top',
+      active && state.floor==='top'
+    );
 
-      el.classList.toggle(
-        'floor-bottom',
-        active &&
-        state.floor==='bottom'
-      );
-    });
+    el.classList.toggle(
+      'floor-bottom',
+      active && state.floor==='bottom'
+    );
+  });
 
-  document.getElementById(
-    'floorStatus'
-  ).textContent=
+  document.getElementById('floorStatus').textContent=
     state.floor==='top'
       ? '⬆ Oberdeck aktiv'
       : '⬇ Unterdeck aktiv';
 
-  document
-    .querySelectorAll('.floor-hit')
-    .forEach(
-      b=>b.addEventListener(
-        'click',
-        e=>{
-          e.stopPropagation();
-          setFloor(b.dataset.floor);
-        }
-      )
-    );
-}
-
-function paintWindowProgress(
-  svg,
-  floor,
-  group
-){
-  if(!group)return;
-
-  const totals=counts();
-
-  const done=
-    Object.keys(
-      coach().seats[floor]||{}
-    ).length;
-
-  const total=
-    totals[floor]||0;
-
-  const ratio=
-    total
-      ? done/total
-      : 0;
-
-  const windows=[
-    ...group.querySelectorAll(
-      'rect,path,polygon'
-    )
-  ].filter(
-    el=>!el.closest('defs')
-  );
-
-  const n=
-    Math.round(
-      windows.length*ratio
-    );
-
-  windows.forEach(
-    (el,i)=>{
-      if(i<n){
-        el.classList.add(
-          'progress-window'
-        );
-      }
-    }
-  );
-
-  group.setAttribute(
-    'data-progress',
-    `${done}/${total}`
+  document.querySelectorAll('.floor-hit').forEach(
+    b=>b.addEventListener('click',e=>{
+      e.stopPropagation();
+      setFloor(b.dataset.floor);
+    })
   );
 }
+
 
 // -----------------------------------------------------------------------------
 // Seats
 // -----------------------------------------------------------------------------
 
 function seatElements(svg){
-  const groups=[
-    ...svg.querySelectorAll('g[id]')
-  ];
+  const groups=[...svg.querySelectorAll('g[id]')];
 
-  const semantic=
-    groups.filter(
-      e=>seatRE.test(e.id)
-    );
+  const semantic=groups.filter(
+    e=>seatRE.test(e.id)
+  );
 
   if(semantic.length){
     return semantic;
@@ -420,6 +292,7 @@ function seatElements(svg){
   );
 }
 
+
 // -----------------------------------------------------------------------------
 // External deck assets
 // -----------------------------------------------------------------------------
@@ -427,21 +300,15 @@ function seatElements(svg){
 const DECK_ASSETS={
   db:{
     2:{
-      top:
-        'assets/db-ic2-class-2-deck-top.svg',
-
-      bottom:
-        'assets/db-ic2-class-2-deck-bottom.svg'
+      top:'assets/db-ic2-class-2-deck-top.svg',
+      bottom:'assets/db-ic2-class-2-deck-bottom.svg'
     }
   },
 
   sbb:{
     2:{
-      top:
-        'assets/sbb-ic2-class-2-deck-top.svg',
-
-      bottom:
-        'assets/sbb-ic2-class-2-deck-bottom.svg'
+      top:'assets/sbb-ic2-class-2-deck-top.svg',
+      bottom:'assets/sbb-ic2-class-2-deck-bottom.svg'
     }
   }
 };
@@ -449,24 +316,15 @@ const DECK_ASSETS={
 function wireDeckSvg(svg){
   if(!svg)return;
 
-  // External SVGs inside <object>
-  // do not inherit editor CSS.
-
   const doc=svg.ownerDocument;
 
-  if(
-    !doc.getElementById(
-      'deckplan-seat-style'
-    )
-  ){
-    const style=
-      doc.createElementNS(
-        'http://www.w3.org/2000/svg',
-        'style'
-      );
+  if(!doc.getElementById('deckplan-seat-style')){
+    const style=doc.createElementNS(
+      'http://www.w3.org/2000/svg',
+      'style'
+    );
 
-    style.id=
-      'deckplan-seat-style';
+    style.id='deckplan-seat-style';
 
     style.textContent=`
       [data-seat]{
@@ -506,26 +364,18 @@ function wireDeckSvg(svg){
       }
     `;
 
-    svg.insertBefore(
-      style,
-      svg.firstChild
-    );
+    svg.insertBefore(style,svg.firstChild);
   }
 
-  const seats=
-    seatElements(svg);
+  const seats=seatElements(svg);
 
-  if(
-    String(state.coachClass)!=='1'
-  ){
+  if(String(state.coachClass)!=='1'){
     coach().totals ||= {
       top:0,
       bottom:0
     };
 
-    coach().totals[
-      state.floor
-    ]=seats.length;
+    coach().totals[state.floor]=seats.length;
 
     localStorage.setItem(
       KEY,
@@ -533,50 +383,29 @@ function wireDeckSvg(svg){
     );
   }
 
-  seats.forEach(
-    (g,i)=>{
-      const key=g.id;
+  seats.forEach((g,i)=>{
+    const key=g.id;
 
-      g.dataset.seat=key;
-      g.dataset.index=i+1;
+    g.dataset.seat=key;
+    g.dataset.index=i+1;
 
-      g.addEventListener(
-        'click',
-        e=>{
-          if(
-            e.target.classList.contains(
-              'seat-delete'
-            )
-          ){
-            return;
-          }
-
-          openEditor(
-            g,
-            key
-          );
-        }
-      );
-
-      const val=
-        coach().seats[
-          state.floor
-        ][key];
-
-      if(val){
-        g.classList.add(
-          'assigned'
-        );
-
-        addSeatMarks(
-          g,
-          val.label,
-          key
-        );
+    g.addEventListener('click',e=>{
+      if(e.target.classList.contains('seat-delete')){
+        return;
       }
+
+      openEditor(g,key);
+    });
+
+    const val=coach().seats[state.floor][key];
+
+    if(val){
+      g.classList.add('assigned');
+      addSeatMarks(g,val.label,key);
     }
-  );
+  });
 }
+
 
 // -----------------------------------------------------------------------------
 // Deck
@@ -585,18 +414,14 @@ function wireDeckSvg(svg){
 function renderDeck(){
   closeEditor();
 
-  const host=
-    document.getElementById('deck');
+  const host=document.getElementById('deck');
 
-  // 1. Klasse bleibt aktuell als bestehendes
-  // Inline-SVG erhalten.
-  if(
-    String(state.coachClass)==='1'
-  ){
-    host.innerHTML=
-      ASSETS[
-        assetKey(state.floor)
-      ];
+  /*
+   * Klasse 1 verwendet aktuell weiterhin
+   * die vorhandenen Inline-ASSETS.
+   */
+  if(String(state.coachClass)==='1'){
+    host.innerHTML=ASSETS[assetKey(state.floor)];
 
     wireDeckSvg(
       host.querySelector('svg')
@@ -606,13 +431,9 @@ function renderDeck(){
   }
 
   const src=
-    DECK_ASSETS[
-      state.operator
-    ]?.[
-      state.coachClass
-    ]?.[
-      state.floor
-    ];
+    DECK_ASSETS[state.operator]
+      ?.[state.coachClass]
+      ?.[state.floor];
 
   if(!src){
     host.innerHTML=`
@@ -638,30 +459,21 @@ function renderDeck(){
     ></object>
   `;
 
-  const obj=
-    host.querySelector('object');
+  const obj=host.querySelector('object');
 
-  obj.addEventListener(
-    'load',
-    ()=>{
-      const svg=
-        obj.contentDocument
-          ?.querySelector('svg');
+  obj.addEventListener('load',()=>{
+    const svg=obj.contentDocument?.querySelector('svg');
 
-      wireDeckSvg(svg);
-    }
-  );
+    wireDeckSvg(svg);
+  });
 }
+
 
 // -----------------------------------------------------------------------------
 // Seat labels
 // -----------------------------------------------------------------------------
 
-function addSeatMarks(
-  g,
-  label,
-  key
-){
+function addSeatMarks(g,label,key){
   let b;
 
   try{
@@ -670,88 +482,46 @@ function addSeatMarks(
     return;
   }
 
-  const ns=
-    'http://www.w3.org/2000/svg';
+  const ns='http://www.w3.org/2000/svg';
+  const doc=g.ownerDocument;
 
-  const doc=
-    g.ownerDocument;
+  const t=doc.createElementNS(ns,'text');
 
-  const t=
-    doc.createElementNS(
-      ns,
-      'text'
-    );
-
-  t.setAttribute(
-    'x',
-    b.x+b.width/2
-  );
-
-  t.setAttribute(
-    'y',
-    b.y+b.height/2
-  );
-
-  t.setAttribute(
-    'class',
-    'seat-label'
-  );
+  t.setAttribute('x',b.x+b.width/2);
+  t.setAttribute('y',b.y+b.height/2);
+  t.setAttribute('class','seat-label');
 
   t.textContent=label;
 
   g.appendChild(t);
 
-  const d=
-    doc.createElementNS(
-      ns,
-      'text'
-    );
+  const d=doc.createElementNS(ns,'text');
 
-  d.setAttribute(
-    'x',
-    b.x+b.width-2
-  );
-
-  d.setAttribute(
-    'y',
-    b.y+4
-  );
-
-  d.setAttribute(
-    'class',
-    'seat-delete'
-  );
+  d.setAttribute('x',b.x+b.width-2);
+  d.setAttribute('y',b.y+4);
+  d.setAttribute('class','seat-delete');
 
   d.textContent='×';
 
-  d.addEventListener(
-    'click',
-    e=>{
-      e.stopPropagation();
+  d.addEventListener('click',e=>{
+    e.stopPropagation();
 
-      delete coach().seats[
-        state.floor
-      ][key];
+    delete coach().seats[state.floor][key];
 
-      persist();
-      renderDeck();
-    }
-  );
+    persist();
+    renderDeck();
+  });
 
   g.appendChild(d);
 }
+
 
 // -----------------------------------------------------------------------------
 // Inline seat editor
 // -----------------------------------------------------------------------------
 
-function closeEditor(
-  save=false
-){
-  const old=
-    document.querySelector(
-      '.seat-inline-input'
-    );
+function closeEditor(save=false){
+  const old=document.querySelector('.seat-inline-input');
 
   if(old){
     if(save){
@@ -764,10 +534,7 @@ function closeEditor(
   currentSeat=null;
 }
 
-function openEditor(
-  g,
-  key
-){
+function openEditor(g,key){
   closeEditor(false);
 
   currentSeat={
@@ -776,47 +543,25 @@ function openEditor(
     floor:state.floor
   };
 
-  const r=
-    g.getBoundingClientRect();
-
-  const owner=
-    g.ownerDocument;
+  const r=g.getBoundingClientRect();
+  const owner=g.ownerDocument;
 
   const obj=
     owner!==document
-      ? [
-          ...document.querySelectorAll(
-            'object.deck-object'
-          )
-        ].find(
-          o=>
-            o.contentDocument===
-            owner
-        )
+      ? [...document.querySelectorAll('object.deck-object')]
+          .find(o=>o.contentDocument===owner)
       : null;
 
-  const or=
-    obj?.getBoundingClientRect();
+  const or=obj?.getBoundingClientRect();
 
-  const xOffset=
-    or?.left||0;
+  const xOffset=or?.left||0;
+  const yOffset=or?.top||0;
 
-  const yOffset=
-    or?.top||0;
+  const inp=document.createElement('input');
 
-  const inp=
-    document.createElement(
-      'input'
-    );
-
-  inp.className=
-    'seat-inline-input';
-
-  inp.inputMode=
-    'numeric';
-
-  inp.autocomplete=
-    'off';
+  inp.className='seat-inline-input';
+  inp.inputMode='numeric';
+  inp.autocomplete='off';
 
   inp.setAttribute(
     'aria-label',
@@ -824,29 +569,19 @@ function openEditor(
   );
 
   inp.value=
-    coach().seats[
-      state.floor
-    ][key]?.label||'';
+    coach().seats[state.floor][key]?.label||'';
 
-  const w=
-    Math.max(
-      26,
-      Math.min(
-        52,
-        r.width*.75
-      )
-    );
+  const w=Math.max(
+    26,
+    Math.min(52,r.width*.75)
+  );
 
-  inp.style.width=
-    w+'px';
+  inp.style.width=w+'px';
 
   inp.style.height=
     Math.max(
       20,
-      Math.min(
-        30,
-        r.height*.65
-      )
+      Math.min(30,r.height*.65)
     )+'px';
 
   inp.style.left=
@@ -865,34 +600,23 @@ function openEditor(
       12
     )+'px';
 
-  document.body.appendChild(
-    inp
-  );
+  document.body.appendChild(inp);
 
-  inp.addEventListener(
-    'keydown',
-    e=>{
-      if(e.key==='Enter'){
-        e.preventDefault();
-        commitInline(inp);
-      }else if(
-        e.key==='Escape'
-      ){
-        e.preventDefault();
-        closeEditor(false);
-      }
+  inp.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){
+      e.preventDefault();
+      commitInline(inp);
+    }else if(e.key==='Escape'){
+      e.preventDefault();
+      closeEditor(false);
     }
-  );
+  });
 
   inp.addEventListener(
     'blur',
     ()=>setTimeout(
       ()=>{
-        if(
-          document.body.contains(
-            inp
-          )
-        ){
+        if(document.body.contains(inp)){
           commitInline(inp);
         }
       },
@@ -908,18 +632,13 @@ function commitInline(inp){
   if(!currentSeat)return;
 
   const cs=currentSeat;
-  const label=
-    inp.value.trim();
+  const label=inp.value.trim();
 
   inp.remove();
   currentSeat=null;
 
   if(!label){
-    delete coach().seats[
-      cs.floor
-    ][
-      cs.key
-    ];
+    delete coach().seats[cs.floor][cs.key];
 
     persist();
     renderDeck();
@@ -940,17 +659,10 @@ function commitInline(inp){
     };
   }
 
-  const svg=
-    cs.g.ownerSVGElement;
+  const svg=cs.g.ownerSVGElement;
+  const vb=svg.viewBox.baseVal;
 
-  const vb=
-    svg.viewBox.baseVal;
-
-  coach().seats[
-    cs.floor
-  ][
-    cs.key
-  ]={
+  coach().seats[cs.floor][cs.key]={
     id:
       `${cs.floor}-${cs.key
         .toLowerCase()
@@ -984,10 +696,7 @@ function commitInline(inp){
 }
 
 function saveSeat(){
-  const inp=
-    document.querySelector(
-      '.seat-inline-input'
-    );
+  const inp=document.querySelector('.seat-inline-input');
 
   if(inp){
     commitInline(inp);
@@ -1000,43 +709,28 @@ function deleteSeat(){
   const cs=currentSeat;
 
   document
-    .querySelector(
-      '.seat-inline-input'
-    )
+    .querySelector('.seat-inline-input')
     ?.remove();
 
   currentSeat=null;
 
-  delete coach().seats[
-    cs.floor
-  ][
-    cs.key
-  ];
+  delete coach().seats[cs.floor][cs.key];
 
   persist();
   renderDeck();
 }
+
 
 // -----------------------------------------------------------------------------
 // Stats
 // -----------------------------------------------------------------------------
 
 function countsForClass1(){
-  const temp=
-    document.createElement('div');
-
+  const temp=document.createElement('div');
   let totals={};
 
-  for(
-    const f of [
-      'bottom',
-      'top'
-    ]
-  ){
-    temp.innerHTML=
-      ASSETS[
-        assetKey(f)
-      ];
+  for(const f of ['bottom','top']){
+    temp.innerHTML=ASSETS[assetKey(f)];
 
     totals[f]=
       seatElements(
@@ -1052,7 +746,7 @@ function renderStats(){
     String(state.coachClass)==='1'
       ? countsForClass1()
       : (
-          coach().totals || {
+          coach().totals||{
             bottom:0,
             top:0
           }
@@ -1076,22 +770,15 @@ function renderStats(){
 
   const p=
     total
-      ? Math.round(
-          c/total*100
-        )
+      ? Math.round(c/total*100)
       : 0;
 
   captured.textContent=c;
 
-  document.getElementById(
-    'total'
-  ).textContent=total;
+  document.getElementById('total').textContent=total;
 
-  percent.textContent=
-    p+'%';
-
-  progress.style.width=
-    p+'%';
+  percent.textContent=p+'%';
+  progress.style.width=p+'%';
 
   const level=
     p===100
@@ -1102,29 +789,25 @@ function renderStats(){
           ? 'mid'
           : 'low';
 
-  progress.className=
-    'progress '+level;
+  progress.className='progress '+level;
 
-  document
-    .querySelectorAll('.stat')
-    .forEach(
-      x=>{
-        x.classList.remove(
-          'status-low',
-          'status-mid',
-          'status-high',
-          'status-done'
-        );
-
-        x.classList.add(
-          'status-'+level
-        );
-      }
+  document.querySelectorAll('.stat').forEach(x=>{
+    x.classList.remove(
+      'status-low',
+      'status-mid',
+      'status-high',
+      'status-done'
     );
+
+    x.classList.add(
+      'status-'+level
+    );
+  });
 
   floorBreakdown.textContent=
     `Unterdeck: ${b}/${totals.bottom} · Oberdeck: ${t}/${totals.top}`;
 }
+
 
 // -----------------------------------------------------------------------------
 // Export
@@ -1136,28 +819,21 @@ function exportState(){
 
     deckPlan:{
       id:'deck-plan-1',
-      operator:
-        state.operator.toUpperCase(),
-      coachClass:
-        Number(state.coachClass)
+      operator:state.operator.toUpperCase(),
+      coachClass:Number(state.coachClass)
     },
 
-    seats:
-      coach().seats
+    seats:coach().seats
   };
 }
 
 function netex(){
-  const decks=[
-    'bottom',
-    'top'
-  ].map(
-    (f,ix)=>{
-      const spots=
-        Object.values(
-          coach().seats[f]
-        ).map(
-          s=>`
+  const decks=['bottom','top'].map((f,ix)=>{
+    const spots=
+      Object.values(
+        coach().seats[f]
+      ).map(
+        s=>`
                     <PassengerSpot id="${esc(s.id)}" version="any">
                       <Label>${esc(s.label)}</Label>
                       <Centroid>
@@ -1166,9 +842,9 @@ function netex(){
                         </Location>
                       </Centroid>
                     </PassengerSpot>`
-        ).join('\n');
+      ).join('\n');
 
-      return `
+    return `
             <Deck id="deck-${f}" version="any">
               <Name>${f==='bottom'?'Lower':'Upper'} Deck</Name>
               <Label>${ix+1}</Label>
@@ -1180,8 +856,7 @@ ${spots}
                 </PassengerSpace>
               </deckSpaces>
             </Deck>`;
-    }
-  ).join('\n');
+  }).join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <PublicationDelivery xmlns="http://www.netex.org.uk/netex" version="1.2.2">
@@ -1201,24 +876,21 @@ ${decks}
 }
 
 function treeNode(el){
-  const kids=[
-    ...el.children
-  ];
+  const kids=[...el.children];
 
-  const attrs=[
-    ...el.attributes
-  ].map(
-    a=>
-      `${a.name}=\"${esc(a.value)}\"`
-  ).join(' ');
+  const attrs=
+    [...el.attributes]
+      .map(
+        a=>`${a.name}=\"${esc(a.value)}\"`
+      )
+      .join(' ');
 
-  const text=[
-    ...el.childNodes
-  ].filter(
-    n=>n.nodeType===3
-  ).map(
-    n=>n.textContent.trim()
-  ).filter(Boolean).join(' ');
+  const text=
+    [...el.childNodes]
+      .filter(n=>n.nodeType===3)
+      .map(n=>n.textContent.trim())
+      .filter(Boolean)
+      .join(' ');
 
   if(!kids.length){
     return `
@@ -1227,6 +899,7 @@ function treeNode(el){
           <span class="node">
             &lt;${el.localName}&gt;
           </span>
+
           ${
             attrs
               ? `<span class="attrs">${attrs}</span>`
@@ -1279,27 +952,20 @@ function renderOutput(){
 
     output.outerHTML=
       '<div id="output" class="netex-tree">'+
-      treeNode(
-        doc.documentElement
-      )+
+      treeNode(doc.documentElement)+
       '</div>';
 
     return;
   }
 
-  const cur=
-    document.getElementById(
-      'output'
-    );
+  const cur=document.getElementById('output');
 
   if(cur.tagName!=='PRE'){
     cur.outerHTML=
       '<pre id="output" class="code"></pre>';
   }
 
-  document.getElementById(
-    'output'
-  ).textContent=
+  document.getElementById('output').textContent=
     tab==='json'
       ? JSON.stringify(
           exportState(),
@@ -1309,22 +975,18 @@ function renderOutput(){
       : netex();
 }
 
+
 // -----------------------------------------------------------------------------
 // Train width
 // -----------------------------------------------------------------------------
 
-const WIDTH_KEY=
-  'deckplan-editor-train-width';
+const WIDTH_KEY='deckplan-editor-train-width';
 
 const trainWidth=
-  document.getElementById(
-    'trainWidth'
-  );
+  document.getElementById('trainWidth');
 
 const trainWidthValue=
-  document.getElementById(
-    'trainWidthValue'
-  );
+  document.getElementById('trainWidthValue');
 
 function applyTrainWidth(value){
   const n=
@@ -1342,14 +1004,9 @@ function applyTrainWidth(value){
       n+'%'
     );
 
-  trainWidth.value=
-    String(n);
-
-  trainWidthValue.value=
-    n+'%';
-
-  trainWidthValue.textContent=
-    n+'%';
+  trainWidth.value=String(n);
+  trainWidthValue.value=n+'%';
+  trainWidthValue.textContent=n+'%';
 
   localStorage.setItem(
     WIDTH_KEY,
@@ -1358,39 +1015,29 @@ function applyTrainWidth(value){
 }
 
 applyTrainWidth(
-  localStorage.getItem(
-    WIDTH_KEY
-  )||75
+  localStorage.getItem(WIDTH_KEY)||75
 );
 
 trainWidth.addEventListener(
   'input',
-  ()=>applyTrainWidth(
-    trainWidth.value
-  )
+  ()=>applyTrainWidth(trainWidth.value)
 );
+
 
 // -----------------------------------------------------------------------------
 // Opacity controls
 // -----------------------------------------------------------------------------
 
-const VIEW_KEY=
-  'deckplan-editor-view-opacity';
+const VIEW_KEY='deckplan-editor-view-opacity';
 
 const activeOpacity=
-  document.getElementById(
-    'activeOpacity'
-  );
+  document.getElementById('activeOpacity');
 
 const inactiveOpacity=
-  document.getElementById(
-    'inactiveOpacity'
-  );
+  document.getElementById('inactiveOpacity');
 
 const inactiveFloorOpacity=
-  document.getElementById(
-    'inactiveFloorOpacity'
-  );
+  document.getElementById('inactiveFloorOpacity');
 
 function applyViewOpacity(){
   const active=
@@ -1398,9 +1045,7 @@ function applyViewOpacity(){
       50,
       Math.min(
         100,
-        Number(
-          activeOpacity.value
-        )||100
+        Number(activeOpacity.value)||100
       )
     );
 
@@ -1409,9 +1054,7 @@ function applyViewOpacity(){
       10,
       Math.min(
         100,
-        Number(
-          inactiveOpacity.value
-        )||50
+        Number(inactiveOpacity.value)||50
       )
     );
 
@@ -1420,9 +1063,7 @@ function applyViewOpacity(){
       10,
       Math.min(
         90,
-        Number(
-          inactiveFloorOpacity.value
-        )||50
+        Number(inactiveFloorOpacity.value)||50
       )
     );
 
@@ -1446,18 +1087,15 @@ function applyViewOpacity(){
 
   document.getElementById(
     'activeOpacityValue'
-  ).textContent=
-    active+'%';
+  ).textContent=active+'%';
 
   document.getElementById(
     'inactiveOpacityValue'
-  ).textContent=
-    inactive+'%';
+  ).textContent=inactive+'%';
 
   document.getElementById(
     'inactiveFloorOpacityValue'
-  ).textContent=
-    floor+'%';
+  ).textContent=floor+'%';
 
   localStorage.setItem(
     VIEW_KEY,
@@ -1472,19 +1110,12 @@ function applyViewOpacity(){
 try{
   const v=
     JSON.parse(
-      localStorage.getItem(
-        VIEW_KEY
-      )||'{}'
+      localStorage.getItem(VIEW_KEY)||'{}'
     );
 
-  activeOpacity.value=
-    v.active??100;
-
-  inactiveOpacity.value=
-    v.inactive??50;
-
-  inactiveFloorOpacity.value=
-    v.floor??50;
+  activeOpacity.value=v.active??100;
+  inactiveOpacity.value=v.inactive??50;
+  inactiveFloorOpacity.value=v.floor??50;
 }catch{}
 
 [
@@ -1500,99 +1131,61 @@ try{
 
 applyViewOpacity();
 
+
 // -----------------------------------------------------------------------------
 // Events
 // -----------------------------------------------------------------------------
 
 document
-  .getElementById(
-    'coachStrip'
-  )
-  .addEventListener(
-    'click',
-    e=>{
-      const el=
-        e.target.closest(
-          '.coach-option'
-        );
+  .getElementById('coachStrip')
+  .addEventListener('click',e=>{
+    const el=e.target.closest('.coach-option');
 
-      if(
-        el &&
-        !e.target.classList.contains(
-          'floor-hit'
-        )
-      ){
-        setCoachClass(
-          el.dataset.coach
-        );
-      }
+    if(
+      el &&
+      !e.target.classList.contains('floor-hit')
+    ){
+      setCoachClass(el.dataset.coach);
     }
-  );
+  });
 
 document
-  .getElementById(
-    'operator'
-  )
-  .addEventListener(
-    'click',
-    e=>{
-      if(e.target.dataset.op){
-        setOperator(
-          e.target.dataset.op
-        );
-      }
+  .getElementById('operator')
+  .addEventListener('click',e=>{
+    if(e.target.dataset.op){
+      setOperator(e.target.dataset.op);
     }
-  );
+  });
 
 document
-  .getElementById(
-    'floor'
-  )
-  .addEventListener(
-    'click',
-    e=>{
-      if(
-        e.target.dataset.floor
-      ){
-        setFloor(
-          e.target.dataset.floor
-        );
-      }
+  .getElementById('floor')
+  .addEventListener('click',e=>{
+    if(e.target.dataset.floor){
+      setFloor(e.target.dataset.floor);
     }
-  );
+  });
 
 document
   .querySelector('.tabs')
-  .addEventListener(
-    'click',
-    e=>{
-      if(e.target.dataset.tab){
-        tab=e.target.dataset.tab;
+  .addEventListener('click',e=>{
+    if(e.target.dataset.tab){
+      tab=e.target.dataset.tab;
 
-        document
-          .querySelectorAll(
-            '.tabs button'
+      document
+        .querySelectorAll('.tabs button')
+        .forEach(
+          b=>b.classList.toggle(
+            'active',
+            b.dataset.tab===tab
           )
-          .forEach(
-            b=>b.classList.toggle(
-              'active',
-              b.dataset.tab===tab
-            )
-          );
+        );
 
-        renderOutput();
-      }
+      renderOutput();
     }
-  );
+  });
 
-document.getElementById(
-  'reset'
-).onclick=()=>{
-  if(
-    confirm(
-      'Alle erfassten Sitznummern löschen?'
-    )
-  ){
+document.getElementById('reset').onclick=()=>{
+  if(confirm('Alle erfassten Sitznummern löschen?')){
     coach().seats={
       bottom:{},
       top:{}
@@ -1603,11 +1196,8 @@ document.getElementById(
   }
 };
 
-document.getElementById(
-  'download'
-).onclick=()=>{
-  const a=
-    document.createElement('a');
+document.getElementById('download').onclick=()=>{
+  const a=document.createElement('a');
 
   a.href=
     URL.createObjectURL(
@@ -1625,14 +1215,10 @@ document.getElementById(
       )
     );
 
-  a.download=
-    'deckplan.json';
-
+  a.download='deckplan.json';
   a.click();
 
-  URL.revokeObjectURL(
-    a.href
-  );
+  URL.revokeObjectURL(a.href);
 };
 
 renderAll();

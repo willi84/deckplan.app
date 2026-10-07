@@ -213,52 +213,31 @@ async function updateBuildInfo() {
 
   const buildInfo = `${buildDate} · ${durationSeconds} s`;
 
+  const buildId = buildStartedAt
+    .toISOString()
+    .replace(/\D/g, "")
+    .slice(0, 14);
+
   let html = await readFile(INDEX_FILE, "utf8");
 
-  const marker =
-    /<!-- BUILD_INFO_START -->.*?<!-- BUILD_INFO_END -->/s;
-
-  if (!marker.test(html)) {
-    console.warn(
-      "⚠️ BUILD_INFO marker not found in index.html - skipping build info.",
-    );
-
-    return null;
-  }
+  html = html.replace(
+    /<!-- BUILD_INFO_START -->.*?<!-- BUILD_INFO_END -->/s,
+    `<!-- BUILD_INFO_START -->${buildInfo}<!-- BUILD_INFO_END -->`,
+  );
 
   html = html.replace(
-    marker,
-    `<!-- BUILD_INFO_START -->${buildInfo}<!-- BUILD_INFO_END -->`,
+    /<!-- BUILD_ID_START -->.*?<!-- BUILD_ID_END -->/s,
+    `<!-- BUILD_ID_START -->${buildId}<!-- BUILD_ID_END -->`,
   );
 
   await writeFile(INDEX_FILE, html, "utf8");
 
-  console.log(`\n🏗️ Build info: ${buildInfo}`);
-
-  return buildInfo;
+  console.log(`🏗️ Build info: ${buildInfo}`);
+  console.log(`🏷️ Build ID: ${buildId}`);
 }
 
 await updateBuildInfo();
 
-
-// -----------------------------------------------------------------------------
-// Generate build ID for cache busting
-// -----------------------------------------------------------------------------
-
-const buildId = buildStartedAt
-  .toISOString()
-  .replace(/\D/g, "")
-  .slice(0, 14);
-
-await writeFile(
-  "js/build.js",
-  `window.DECKPLAN_BUILD_ID = "${buildId}";\n`,
-  "utf8",
-);
-
-console.log(`🏷️ Build ID: ${buildId}`);
-
-await updateBuildInfo();
 
 // -----------------------------------------------------------------------------
 // Summary
