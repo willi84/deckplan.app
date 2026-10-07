@@ -1,11 +1,27 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { performance } from "node:perf_hooks";
 
 const FIGMA_TOKEN = process.env.FIGMA_TOKEN_DECKPLAN;
 const FIGMA_FILE_KEY = process.env.FIGMA_FILE_KEY_DECKPLAN;
-const FIGMA_NODE_ID = process.env["FIGMA_NODE_ID_DECKPLAN"];
 
 const OUTPUT_DIRECTORY = "assets";
+const INDEX_FILE = "index.html";
 
+const buildStarted = performance.now();
+const buildStartedAt = new Date();
+
+/**
+ * Erkannte Figma-Layer:
+ *
+ * db-ic2-class-1-side
+ * db-ic2-class-1-deck-top
+ * db-ic2-class-1-deck-bottom
+ * db-ic2-class-2-side
+ * db-ic2-class-2-deck-top
+ * db-ic2-class-2-deck-bottom
+ *
+ * sowie die entsprechenden sbb-* Layer.
+ */
 const ASSET_NAME_PATTERN =
   /^(db|sbb)-ic2-class-[12]-(side|deck-top|deck-bottom)$/;
 
@@ -21,16 +37,13 @@ if (!FIGMA_FILE_KEY) {
   throw new Error("FIGMA_FILE_KEY_DECKPLAN is missing");
 }
 
-if (!FIGMA_NODE_ID) {
-  throw new Error("FIGMA_NODE_ID_DECKPLAN is missing");
-}
-
 const headers = {
   "X-Figma-Token": FIGMA_TOKEN,
 };
 
-// Figma URLs often contain 123-456, while the API uses 123:456.
-const nodeId = FIGMA_NODE_ID.replace("-", ":");
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
 
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
@@ -46,31 +59,49 @@ async function fetchJson(url, options = {}) {
   return response.json();
 }
 
+async function downloadSvg(url, filename) {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed downloading ${filename}: ` +
+      `${response.status} ${response.statusText}`,
+    );
+  }
+
+  const svg = await response.text();
+
+  if (!svg.includes("<svg")) {
+    throw new Error(
+      `Downloaded file ${filename} does not appear to be SVG`,
+    );
+  }
+
+  await writeFile(
+    `${OUTPUT_DIRECTORY}/${filename}`,
+    svg,
+    "utf8",
+  );
+}
+
 // -----------------------------------------------------------------------------
-// Start-Node from Figma
+// Komplettes Figma-Dokument laden
 // -----------------------------------------------------------------------------
 
-console.log("🎨 Loading DeckPlan from Figma...");
+console.log("🎨 Loading DeckPlan Figma document...");
 console.log(`📄 File: ${FIGMA_FILE_KEY}`);
-console.log(`🌳 Root node: ${nodeId}`);
 
-const nodeResult = await fetchJson(
-  `https://api.figma.com/v1/files/${FIGMA_FILE_KEY}/nodes?ids=${encodeURIComponent(nodeId)}`,
+const file = await fetchJson(
+  `https://api.figma.com/v1/files/${FIGMA_FILE_KEY}`,
   {
     headers,
   },
 );
 
-const root = nodeResult.nodes?.[nodeId]?.document;
-
-if (!root) {
-  throw new Error(
-    `Figma node ${nodeId} was not found in file ${FIGMA_FILE_KEY}`,
-  );
-}
+console.log(`📐 Figma document: ${file.name ?? "unknown"}`);
 
 // -----------------------------------------------------------------------------
-// Find matching layers recursively
+// Komplettes Dokument rekursiv durchsuchen
 // -----------------------------------------------------------------------------
 
 const assets = new Map();
@@ -101,10 +132,10 @@ function findAssets(node) {
   }
 }
 
-findAssets(root);
+findAssets(file.document);
 
 // -----------------------------------------------------------------------------
-// Validate result
+// Gefundene Assets prüfen
 // -----------------------------------------------------------------------------
 
 if (duplicates.length > 0) {
@@ -117,33 +148,40 @@ if (duplicates.length > 0) {
     );
   }
 
-  console.warn("   → First occurrence will be used.");
+  console.warn(
+    "   → First occurrence will be used.",
+  );
 }
 
 if (assets.size === 0) {
   throw new Error(
-    `No DeckPlan assets found below Figma node ${nodeId}.\n\n` +
+    "No DeckPlan assets found in Figma.\n\n" +
     "Expected layer names like:\n" +
     "  db-ic2-class-1-side\n" +
     "  db-ic2-class-1-deck-top\n" +
     "  db-ic2-class-1-deck-bottom\n" +
-    "  db-ic2-class-2-side\n" +
+    "  sbb-ic2-class-2-deck-top\n" +
     "  ...",
   );
 }
 
-console.log(`\n🔎 Found ${assets.size} DeckPlan assets.`);
+console.log(
+  `\n🔎 Found ${assets.size} DeckPlan assets.`,
+);
 
 // -----------------------------------------------------------------------------
-// Request SVG export URLs
+// SVG-Export bei Figma anfordern
 // -----------------------------------------------------------------------------
 
 const exportParams = new URLSearchParams({
   ids: [...assets.values()].join(","),
   format: "svg",
 
-  // Keep Figma layer names as SVG IDs.
-  // Required for SEAT_*, WINDOWS_TOP, WINDOWS_BOTTOM, etc.
+  /**
+   * Wichtig für den DeckPlan Editor:
+   * Layer-Namen wie SEAT_*, WINDOWS_TOP usw.
+   * sollen als IDs im SVG erhalten bleiben.
+   */
   svg_include_id: "true",
 });
 
@@ -163,7 +201,7 @@ if (exportResult.err) {
 }
 
 // -----------------------------------------------------------------------------
-// Create assets directory
+// assets/ anlegen
 // -----------------------------------------------------------------------------
 
 await mkdir(
@@ -174,7 +212,7 @@ await mkdir(
 );
 
 // -----------------------------------------------------------------------------
-// Download SVGs
+// SVGs herunterladen
 // -----------------------------------------------------------------------------
 
 let downloaded = 0;
@@ -182,15 +220,14 @@ let failed = 0;
 
 console.log("\n📦 Downloading SVGs...\n");
 
-for (const [name, assetNodeId] of assets) {
-  const imageUrl = exportResult.images?.[assetNodeId];
+for (const [name, nodeId] of assets) {
+  const imageUrl = exportResult.images?.[nodeId];
 
   const filename = `${name}.svg`;
-  const target = `${OUTPUT_DIRECTORY}/${filename}`;
 
   if (!imageUrl) {
     console.error(
-      `❌ No export URL returned for ${name} (${assetNodeId})`,
+      `❌ No export URL returned for ${filename} (${nodeId})`,
     );
 
     failed++;
@@ -199,31 +236,16 @@ for (const [name, assetNodeId] of assets) {
   }
 
   try {
-    const response = await fetch(imageUrl);
-
-    if (!response.ok) {
-      throw new Error(
-        `${response.status} ${response.statusText}`,
-      );
-    }
-
-    const svg = await response.text();
-
-    if (!svg.includes("<svg")) {
-      throw new Error(
-        "Downloaded file does not appear to be SVG",
-      );
-    }
-
-    await writeFile(
-      target,
-      svg,
-      "utf8",
+    await downloadSvg(
+      imageUrl,
+      filename,
     );
 
     downloaded++;
 
-    console.log(`💾 ${target}`);
+    console.log(
+      `💾 ${OUTPUT_DIRECTORY}/${filename}`,
+    );
   } catch (error) {
     failed++;
 
@@ -234,17 +256,75 @@ for (const [name, assetNodeId] of assets) {
 }
 
 // -----------------------------------------------------------------------------
+// Build-Information in index.html schreiben
+// -----------------------------------------------------------------------------
+
+async function updateBuildInfo() {
+  const durationSeconds =
+    ((performance.now() - buildStarted) / 1000).toFixed(2);
+
+  const buildDate = new Intl.DateTimeFormat(
+    "de-DE",
+    {
+      dateStyle: "medium",
+      timeStyle: "medium",
+      timeZone: "Europe/Berlin",
+    },
+  ).format(buildStartedAt);
+
+  const buildInfo =
+    `${buildDate} · ${durationSeconds} s`;
+
+  let html = await readFile(
+    INDEX_FILE,
+    "utf8",
+  );
+
+  const marker =
+    /<!-- BUILD_INFO_START -->.*?<!-- BUILD_INFO_END -->/s;
+
+  if (!marker.test(html)) {
+    console.warn(
+      "⚠️ BUILD_INFO marker not found in index.html",
+    );
+
+    return;
+  }
+
+  html = html.replace(
+    marker,
+    `<!-- BUILD_INFO_START -->${buildInfo}<!-- BUILD_INFO_END -->`,
+  );
+
+  await writeFile(
+    INDEX_FILE,
+    html,
+    "utf8",
+  );
+
+  console.log(
+    `🏗️ Build info: ${buildInfo}`,
+  );
+}
+
+await updateBuildInfo();
+
+// -----------------------------------------------------------------------------
 // Summary
 // -----------------------------------------------------------------------------
+
+const totalDuration =
+  ((performance.now() - buildStarted) / 1000).toFixed(2);
 
 console.log("\n────────────────────────────────────");
 console.log("🚆 DeckPlan Figma import");
 console.log("────────────────────────────────────");
-console.log(`Root node:  ${nodeId}`);
-console.log(`Found:      ${assets.size}`);
-console.log(`Downloaded: ${downloaded}`);
-console.log(`Failed:     ${failed}`);
-console.log(`Duplicates: ${duplicates.length}`);
+console.log(`Figma file:  ${file.name ?? FIGMA_FILE_KEY}`);
+console.log(`Found:       ${assets.size}`);
+console.log(`Downloaded:  ${downloaded}`);
+console.log(`Failed:      ${failed}`);
+console.log(`Duplicates:  ${duplicates.length}`);
+console.log(`Duration:    ${totalDuration} s`);
 console.log("────────────────────────────────────");
 
 if (failed > 0) {
