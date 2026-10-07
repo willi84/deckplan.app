@@ -1,0 +1,6 @@
+{
+  "scripts": {
+    "figma": "node scripts/fetch-figma-assets.mjs",
+    "build": "npm run figma"
+  }
+}
