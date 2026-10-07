@@ -7,23 +7,11 @@ const FIGMA_FILE_KEY = process.env.FIGMA_FILE_KEY_DECKPLAN;
 const OUTPUT_DIRECTORY = "assets";
 const INDEX_FILE = "index.html";
 
-const buildStarted = performance.now();
-const buildStartedAt = new Date();
-
-/**
- * Erkannte Figma-Layer:
- *
- * db-ic2-class-1-side
- * db-ic2-class-1-deck-top
- * db-ic2-class-1-deck-bottom
- * db-ic2-class-2-side
- * db-ic2-class-2-deck-top
- * db-ic2-class-2-deck-bottom
- *
- * sowie die entsprechenden sbb-* Layer.
- */
 const ASSET_NAME_PATTERN =
   /^(db|sbb)-ic2-class-[12]-(side|deck-top|deck-bottom)$/;
+
+const buildStartedAt = new Date();
+const buildStarted = performance.now();
 
 // -----------------------------------------------------------------------------
 // Configuration
@@ -59,49 +47,40 @@ async function fetchJson(url, options = {}) {
   return response.json();
 }
 
-async function downloadSvg(url, filename) {
+async function downloadSvg(url, target) {
   const response = await fetch(url);
 
   if (!response.ok) {
     throw new Error(
-      `Failed downloading ${filename}: ` +
-      `${response.status} ${response.statusText}`,
+      `Download failed: ${response.status} ${response.statusText}`,
     );
   }
 
   const svg = await response.text();
 
   if (!svg.includes("<svg")) {
-    throw new Error(
-      `Downloaded file ${filename} does not appear to be SVG`,
-    );
+    throw new Error("Downloaded file does not appear to be SVG");
   }
 
-  await writeFile(
-    `${OUTPUT_DIRECTORY}/${filename}`,
-    svg,
-    "utf8",
-  );
+  await writeFile(target, svg, "utf8");
 }
 
 // -----------------------------------------------------------------------------
-// Komplettes Figma-Dokument laden
+// Load complete Figma document
 // -----------------------------------------------------------------------------
 
-console.log("🎨 Loading DeckPlan Figma document...");
+console.log("🎨 Loading DeckPlan from Figma...");
 console.log(`📄 File: ${FIGMA_FILE_KEY}`);
 
 const file = await fetchJson(
   `https://api.figma.com/v1/files/${FIGMA_FILE_KEY}`,
-  {
-    headers,
-  },
+  { headers },
 );
 
-console.log(`📐 Figma document: ${file.name ?? "unknown"}`);
+console.log(`📐 Document: ${file.name ?? "unknown"}`);
 
 // -----------------------------------------------------------------------------
-// Komplettes Dokument rekursiv durchsuchen
+// Find DeckPlan assets recursively
 // -----------------------------------------------------------------------------
 
 const assets = new Map();
@@ -121,9 +100,7 @@ function findAssets(node) {
     } else {
       assets.set(node.name, node.id);
 
-      console.log(
-        `✅ Found ${node.name} → ${node.id}`,
-      );
+      console.log(`✅ Found ${node.name} → ${node.id}`);
     }
   }
 
@@ -135,7 +112,7 @@ function findAssets(node) {
 findAssets(file.document);
 
 // -----------------------------------------------------------------------------
-// Gefundene Assets prüfen
+// Validate result
 // -----------------------------------------------------------------------------
 
 if (duplicates.length > 0) {
@@ -143,45 +120,32 @@ if (duplicates.length > 0) {
 
   for (const duplicate of duplicates) {
     console.warn(
-      `   ${duplicate.name}: ` +
-      `${duplicate.first} / ${duplicate.duplicate}`,
+      `   ${duplicate.name}: ${duplicate.first} / ${duplicate.duplicate}`,
     );
   }
 
-  console.warn(
-    "   → First occurrence will be used.",
-  );
+  console.warn("   → First occurrence will be used.");
 }
 
 if (assets.size === 0) {
   throw new Error(
-    "No DeckPlan assets found in Figma.\n\n" +
-    "Expected layer names like:\n" +
-    "  db-ic2-class-1-side\n" +
-    "  db-ic2-class-1-deck-top\n" +
-    "  db-ic2-class-1-deck-bottom\n" +
-    "  sbb-ic2-class-2-deck-top\n" +
-    "  ...",
+    "No DeckPlan assets found in Figma.\n" +
+      "Expected names like db-ic2-class-1-side or " +
+      "sbb-ic2-class-2-deck-top.",
   );
 }
 
-console.log(
-  `\n🔎 Found ${assets.size} DeckPlan assets.`,
-);
+console.log(`\n🔎 Found ${assets.size} DeckPlan assets.`);
 
 // -----------------------------------------------------------------------------
-// SVG-Export bei Figma anfordern
+// Request SVG exports
 // -----------------------------------------------------------------------------
 
 const exportParams = new URLSearchParams({
   ids: [...assets.values()].join(","),
   format: "svg",
 
-  /**
-   * Wichtig für den DeckPlan Editor:
-   * Layer-Namen wie SEAT_*, WINDOWS_TOP usw.
-   * sollen als IDs im SVG erhalten bleiben.
-   */
+  // Preserve Figma layer names such as SEAT_* as SVG IDs.
   svg_include_id: "true",
 });
 
@@ -189,31 +153,20 @@ console.log("\n🚆 Requesting SVG exports...");
 
 const exportResult = await fetchJson(
   `https://api.figma.com/v1/images/${FIGMA_FILE_KEY}?${exportParams}`,
-  {
-    headers,
-  },
+  { headers },
 );
 
 if (exportResult.err) {
-  throw new Error(
-    `Figma export failed: ${exportResult.err}`,
-  );
+  throw new Error(`Figma export failed: ${exportResult.err}`);
 }
 
 // -----------------------------------------------------------------------------
-// assets/ anlegen
+// Download SVGs into assets/
 // -----------------------------------------------------------------------------
 
-await mkdir(
-  OUTPUT_DIRECTORY,
-  {
-    recursive: true,
-  },
-);
-
-// -----------------------------------------------------------------------------
-// SVGs herunterladen
-// -----------------------------------------------------------------------------
+await mkdir(OUTPUT_DIRECTORY, {
+  recursive: true,
+});
 
 let downloaded = 0;
 let failed = 0;
@@ -222,73 +175,55 @@ console.log("\n📦 Downloading SVGs...\n");
 
 for (const [name, nodeId] of assets) {
   const imageUrl = exportResult.images?.[nodeId];
-
   const filename = `${name}.svg`;
+  const target = `${OUTPUT_DIRECTORY}/${filename}`;
 
   if (!imageUrl) {
-    console.error(
-      `❌ No export URL returned for ${filename} (${nodeId})`,
-    );
-
+    console.error(`❌ No export URL for ${name} (${nodeId})`);
     failed++;
-
     continue;
   }
 
   try {
-    await downloadSvg(
-      imageUrl,
-      filename,
-    );
+    await downloadSvg(imageUrl, target);
 
     downloaded++;
 
-    console.log(
-      `💾 ${OUTPUT_DIRECTORY}/${filename}`,
-    );
+    console.log(`💾 ${target}`);
   } catch (error) {
     failed++;
 
-    console.error(
-      `❌ ${filename}: ${error.message}`,
-    );
+    console.error(`❌ ${filename}: ${error.message}`);
   }
 }
 
 // -----------------------------------------------------------------------------
-// Build-Information in index.html schreiben
+// Update build information in index.html
 // -----------------------------------------------------------------------------
 
 async function updateBuildInfo() {
   const durationSeconds =
     ((performance.now() - buildStarted) / 1000).toFixed(2);
 
-  const buildDate = new Intl.DateTimeFormat(
-    "de-DE",
-    {
-      dateStyle: "medium",
-      timeStyle: "medium",
-      timeZone: "Europe/Berlin",
-    },
-  ).format(buildStartedAt);
+  const buildDate = new Intl.DateTimeFormat("de-DE", {
+    dateStyle: "medium",
+    timeStyle: "medium",
+    timeZone: "Europe/Berlin",
+  }).format(buildStartedAt);
 
-  const buildInfo =
-    `${buildDate} · ${durationSeconds} s`;
+  const buildInfo = `${buildDate} · ${durationSeconds} s`;
 
-  let html = await readFile(
-    INDEX_FILE,
-    "utf8",
-  );
+  let html = await readFile(INDEX_FILE, "utf8");
 
   const marker =
     /<!-- BUILD_INFO_START -->.*?<!-- BUILD_INFO_END -->/s;
 
   if (!marker.test(html)) {
     console.warn(
-      "⚠️ BUILD_INFO marker not found in index.html",
+      "⚠️ BUILD_INFO marker not found in index.html - skipping build info.",
     );
 
-    return;
+    return null;
   }
 
   html = html.replace(
@@ -296,15 +231,11 @@ async function updateBuildInfo() {
     `<!-- BUILD_INFO_START -->${buildInfo}<!-- BUILD_INFO_END -->`,
   );
 
-  await writeFile(
-    INDEX_FILE,
-    html,
-    "utf8",
-  );
+  await writeFile(INDEX_FILE, html, "utf8");
 
-  console.log(
-    `🏗️ Build info: ${buildInfo}`,
-  );
+  console.log(`\n🏗️ Build info: ${buildInfo}`);
+
+  return buildInfo;
 }
 
 await updateBuildInfo();
