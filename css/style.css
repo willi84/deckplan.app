@@ -71,3 +71,6 @@ body.operator-db .card{border-radius:6px} body.operator-sbb .card{border-radius:
 
 /* deckplan.app branding */
 .topbar .site-brand{display:flex;align-items:center;margin:0 auto 0 0;line-height:1}.site-brand a{display:inline-flex;align-items:center}.site-brand img{display:block;width:clamp(145px,20vw,240px);height:auto;max-width:100%}@media(max-width:520px){.topbar{padding:10px 12px;gap:10px}.site-brand img{width:170px}}
+
+/* Optional deployment controls */
+.rebuild-status{font-size:12px;line-height:1.5;margin:8px 0;overflow-wrap:anywhere}.rebuild-status:empty{display:none}.rebuild-status[data-state=error]{color:#b42318}.rebuild-status[data-state=success]{color:#18794e}.rebuild-settings[hidden]{display:none!important}.rebuild-settings{padding:12px;margin:8px 0;border:1px solid #d9dee4;border-radius:8px;background:#f8fafc}.rebuild-settings form{display:grid;gap:8px}.rebuild-settings p{font-size:11px;margin:0}.rebuild-settings label{display:grid;gap:3px;font-size:12px}.rebuild-settings input{width:100%;min-width:0;box-sizing:border-box;padding:6px;border:1px solid #cbd5e1;border-radius:5px}.actions button:disabled{opacity:.55;cursor:wait}
