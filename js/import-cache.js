@@ -78,7 +78,7 @@
   const assets = ['db','sbb'].flatMap(op => [1,2].flatMap(cls => ['side','deck-top','deck-bottom'].map(kind => `assets/${op}-ic2-class-${cls}-${kind}.svg`)));
   const grid = document.getElementById('cacheGrid');
   const cacheStatus = document.getElementById('cacheStatus');
-  const cacheName = 'deckplan-graphics-v1';
+  const cacheName = 'deckplan-graphics-v2';
   async function showCache() {
     if (!('caches' in window)) {cacheStatus.textContent = 'Cache API nicht verfügbar'; return;}
     try {
@@ -87,23 +87,69 @@
       grid.replaceChildren(...assets.map((path,i) => {
         const square = document.createElement('span');
         square.className = 'cache-square' + (entries[i] ? ' cached' : '') + (path.startsWith(`assets/${state.operator}-ic2-class-${state.coachClass}-`) ? ' active' : '');
-        square.title = `${path.split('/').pop()}: ${entries[i] ? 'gespeichert' : 'nicht gespeichert'}`;
+        const match = path.match(/assets\/(db|sbb)-ic2-class-(1|2)-(side|deck-top|deck-bottom)\.svg$/);
+        if (match) {
+          const [, company, cls, kind] = match;
+          square.textContent = `${cls}${kind === 'deck-top' ? 'O' : kind === 'deck-bottom' ? 'U' : 'S'}`;
+          square.dataset.company = company;
+          square.dataset.kind = kind;
+        }
+        square.title = `${match?.[1]?.toUpperCase() || ''} ${square.textContent} (${match?.[3] || ''}): ${entries[i] ? 'gespeichert' : 'nicht gespeichert'}`;
         square.setAttribute('aria-label', square.title);
         return square;
       }));
       cacheStatus.textContent = `${entries.filter(Boolean).length}/${assets.length} Grafiken zwischengespeichert · Netzwerk zuerst`;
     } catch {cacheStatus.textContent = 'Cache nicht verfügbar';}
   }
-  document.getElementById('cacheRefresh').addEventListener('click', async () => {
-    if (navigator.serviceWorker?.controller) navigator.serviceWorker.controller.postMessage({type:'REFRESH_GRAPHICS'});
-    await showCache();
+  document.getElementById('cacheRefresh').addEventListener('click', showCache);
+  const clearButton = document.getElementById('cacheClear');
+  clearButton.addEventListener('click', async () => {
+    if (!('caches' in window)) { cacheStatus.textContent = 'Cache API nicht verfügbar'; return; }
+    clearButton.disabled = true;
+    cacheStatus.textContent = 'Cache wird gelöscht …';
+    try {
+      // Do not delete saved seat edits or settings from localStorage.
+      // Keep a short pause on operator prefetch to prevent immediate refilling.
+      pausePrefetchUntil = Date.now() + 3000;
+      await cacheJob.catch(() => {});
+      const names = await caches.keys();
+      await Promise.all(names.filter(name => name.startsWith('deckplan-')).map(name => caches.delete(name)));
+      await showCache();
+      cacheStatus.textContent += ' · Cache gelöscht (Profileinstellungen bleiben erhalten)';
+    } catch (err) { cacheStatus.textContent = 'Cache konnte nicht gelöscht werden: ' + err.message; }
+    finally { clearButton.disabled = false; }
   });
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('sw.js').then(() => showCache()).catch(() => showCache());
     navigator.serviceWorker.addEventListener('message', e => {if(e.data?.type === 'GRAPHICS_UPDATED') showCache();});
   }
   showCache();
-  document.getElementById('operator').addEventListener('click', () => queueMicrotask(showCache));
+  // Cache all six graphics of the selected operator on switching, including
+  // the currently hidden class/deck. Avoid repeated downloads when cached.
+  let cacheJob = Promise.resolve();
+  let pausePrefetchUntil = 0;
+  async function cacheOperator(op) {
+    if (Date.now() < pausePrefetchUntil || !('caches' in window) || !['db', 'sbb'].includes(op)) return;
+    const cache = await caches.open(cacheName);
+    const selected = assets.filter(path => path.startsWith(`assets/${op}-`));
+    for (const path of selected) {
+      const url = new URL(path, location.href);
+      if (await cache.match(url, {ignoreSearch:true})) continue;
+      try {
+        const response = await fetch(url, {cache:'no-cache'});
+        if (response.ok) await cache.put(url, response.clone());
+      } catch { /* Offline: keep existing cache and retry on next switch. */ }
+      await showCache();
+    }
+    await showCache();
+  }
+  document.getElementById('operator').addEventListener('click', e => {
+    const button = e.target.closest('button[data-op]');
+    if (!button) return;
+    const op = button.dataset.op;
+    queueMicrotask(showCache);
+    cacheJob = cacheJob.catch(() => {}).then(() => cacheOperator(op));
+  });
   document.getElementById('floor').addEventListener('click', () => queueMicrotask(showCache));
   document.getElementById('coachStrip').addEventListener('click', () => queueMicrotask(showCache));
 })();

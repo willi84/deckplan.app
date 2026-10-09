@@ -95,3 +95,5 @@ input[type=range]{accent-color:var(--brand)!important}
 .cache-square.active{box-shadow:inset 0 0 0 2px var(--brand)}
 .cache-widget small{display:block;color:#74708b;margin-top:7px;font-size:10px}
 #uploadStatus:not(:empty){padding:6px 0}
+
+.cache-controls{display:flex;align-items:center;gap:8px}.cache-controls #cacheClear{font-size:11px;border:1px solid #dcd9f5;border-radius:6px;padding:4px 7px;background:white;color:#4d45d9}.cache-controls #cacheClear:disabled{opacity:.5}

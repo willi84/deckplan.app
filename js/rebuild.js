@@ -106,7 +106,16 @@
         if (!latest) { setStatus(`Warte auf neuen Build · ${cfg.maxPolls - poll} Prüfungen übrig`, 'waiting'); continue; }
         const state = latest.readyState || latest.state;
         if (state === 'READY') {
+          setStatus('✅ Build erfolgreich – Cache wird erneuert …', 'success');
+          // Clear stale app shell/profile resources only after a successful build.
+          try {
+            const names = await caches.keys();
+            await Promise.all(names.filter(n => n.startsWith('deckplan-')).map(n => caches.delete(n)));
+            navigator.serviceWorker?.controller?.postMessage({type:'BUILD_READY'});
+            await navigator.serviceWorker?.getRegistration()?.then(r => r?.update());
+          } catch (error) { console.warn('Cache cleanup failed:', error); }
           setStatus('✅ Build erfolgreich – Seite wird neu geladen …', 'success');
+          // Local profile edits are retained; only service-worker resources are invalidated.
           // Bust browser/CDN caches for the document on reload.
           const target = new URL(location.href);
           target.searchParams.delete('rebuildConfig');
