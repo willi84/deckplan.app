@@ -64,3 +64,7 @@ body.operator-db .card{border-radius:6px} body.operator-sbb .card{border-radius:
 .coach-progress.top{top:25%}.coach-progress.bottom{bottom:25%}
 .coach-option.active.floor-top .mini-side img,.coach-option.active.floor-bottom .mini-side img{opacity:1}.coach-option.active.floor-top .floor-hit.bottom,.coach-option.active.floor-bottom .floor-hit.top{background:rgba(255,255,255,var(--floor-dim-overlay,.5))}.coach-option.active.floor-top .floor-hit.top,.coach-option.active.floor-bottom .floor-hit.bottom{background:transparent;outline:0}
 .deck-object{display:block;width:100%;height:auto;min-height:130px;border:0}.deck-missing{padding:48px 20px;text-align:center;color:#68707a;border:1px dashed #cbd1d8;border-radius:8px;background:#fafbfc}.deck-missing strong{display:block;color:#343a40;margin-bottom:6px}
+
+.text-center{
+  text-align: center;
+}
